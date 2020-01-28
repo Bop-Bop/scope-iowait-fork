@@ -1,4 +1,4 @@
-apiVersion: apps/v1
+apiVersion: extensions/v1beta1
 kind: DaemonSet
 metadata:
   labels:
@@ -6,9 +6,10 @@ metadata:
     weavescope-component: weavescope-iowait-plugin
   name: weavescope-iowait-plugin
 spec:
-  selector: 
+  selector:
       matchLabels:
-          app: weavescope-iowait-plugin
+        app: weavescope
+        weavescope-component: weavescope-iowait-plugin
   template:
     metadata:
       labels:
