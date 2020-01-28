@@ -8,7 +8,7 @@ metadata:
 spec:
   selector: 
       matchLabels:
-          app: weavescope-iowait-plugin
+          app: weavescope
   template:
     metadata:
       labels:
