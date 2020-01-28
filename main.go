@@ -346,7 +346,7 @@ func (p *Plugin) allControlDetails() []controlDetails {
 		{
 			id:    "switchToIOWait",
 			human: "Switch to IO wait",
-			icon:  "fa-clock-o",
+			icon:  "ambulance",
 			dead:  p.iowaitMode,
 		},
 		{
