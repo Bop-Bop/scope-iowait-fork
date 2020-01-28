@@ -6,6 +6,9 @@ metadata:
     weavescope-component: weavescope-iowait-plugin
   name: weavescope-iowait-plugin
 spec:
+  selector: 
+      matchLabels:
+          name: weavescope-iowait-plugin
   template:
     metadata:
       labels:
