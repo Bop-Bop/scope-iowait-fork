@@ -129,7 +129,7 @@ type controlData struct {
 
 type metricTemplate struct {
 	ID       string  `json:"id"`
-	Label    string  `json:"label,omitempty"`
+	Label    string  `json:"label,switchToIOWait,omitempty"`
 	Format   string  `json:"format,omitempty"`
 	Priority float64 `json:"priority,omitempty"`
 }
@@ -279,7 +279,7 @@ func (p *Plugin) Control(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusBadRequest)
 		return
 	}
-	expectedControlID, _, _ := p.controlDetails()
+	expectedControlID, _, _ := p.controlDetails(xreq.Control)
 	if expectedControlID != xreq.Control {
 		log.Printf("Bad control, expected %q, got %q", expectedControlID, xreq.Control)
 		w.WriteHeader(http.StatusBadRequest)
@@ -287,11 +287,18 @@ func (p *Plugin) Control(w http.ResponseWriter, r *http.Request) {
 	}
 	p.iowaitMode = !p.iowaitMode
 	rpt, err := p.makeReport()
+
+	// TODO remove: added to try out controls
+	if xreq.Control == "showMyStuff" {
+		rpt, err = p.makeFakeReport()
+	}
+
 	if err != nil {
 		log.Printf("error: %v", err)
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
+
 	res := response{ShortcutReport: rpt}
 	raw, err := json.Marshal(res)
 	if err != nil {
@@ -342,12 +349,18 @@ func (p *Plugin) allControlDetails() []controlDetails {
 			icon:  "fa-clock-o",
 			dead:  p.iowaitMode,
 		},
+		{
+			id:    "showMyStuff",
+			human: "Show My Stuff",
+			icon:  "bicycle",
+			dead:  p.iowaitMode,
+		},
 	}
 }
 
-func (p *Plugin) controlDetails() (string, string, string) {
+func (p *Plugin) controlDetails(cntrlName string) (string, string, string) {
 	for _, details := range p.allControlDetails() {
-		if !details.dead {
+		if !details.dead && details.id == cntrlName {
 			return details.id, details.human, details.icon
 		}
 	}
@@ -395,4 +408,59 @@ func iostat() ([]string, error) {
 		return nil, fmt.Errorf("iowait: unexpected output: %q", out)
 	}
 	return values, nil
+}
+
+
+
+
+
+// TODO remove: added to try out controls
+func (p *Plugin) makeFakeReport() (*report, error) {
+	metrics, err := p.fakeMetrics()
+	if err != nil {
+		return nil, err
+	}
+	rpt := &report{
+		Host: topology{
+			Nodes: map[string]node{
+				p.getTopologyHost(): {
+					Metrics:        metrics,
+					LatestControls: p.latestControls(),
+				},
+			},
+			MetricTemplates: p.metricTemplates(),
+			Controls:        p.controls(),
+		},
+		Plugins: []pluginSpec{
+			{
+				ID:          "iowait",
+				Label:       "iowait",
+				Description: "Adds a graph of CPU IO Wait to hosts",
+				Interfaces:  []string{"reporter", "controller"},
+				APIVersion:  "1",
+			},
+		},
+	}
+	return rpt, nil
+}
+
+func (p *Plugin) fakeMetrics() (map[string]metric, error) {
+	_, err := p.metricValue()
+	if err != nil {
+		return nil, err
+	}
+	id, _ := p.metricIDAndName()
+	metrics := map[string]metric{
+		id: {
+			Samples: []sample{
+				{
+					Date:  time.Now(),
+					Value: 66,
+				},
+			},
+			Min: 0,
+			Max: 100,
+		},
+	}
+	return metrics, nil
 }
