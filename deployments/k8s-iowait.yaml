@@ -20,7 +20,8 @@ spec:
       hostNetwork: true
       containers:
         - name: weavescope-iowait-plugin
-          image: weaveworksplugins/scope-iowait:latest
+          image: custom_waitio_plugin:latest
+          imagePullPolicy: Never
           securityContext:
             privileged: true
           volumeMounts:

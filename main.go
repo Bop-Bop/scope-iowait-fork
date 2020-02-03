@@ -42,6 +42,21 @@ func setupSignals(socketPath string) {
 }
 
 func main() {
+
+	//TODO stuff i did to try getting network policy
+	/*
+	cmd := exec.Command("kubectl", "get", "pods")
+	var out bytes.Buffer
+	var stderr bytes.Buffer
+	cmd.Stdout = &out
+	cmd.Stderr = &stderr
+	err2 := cmd.Run()
+	if err2 != nil {
+		log.Println("error:")
+		log.Println(fmt.Sprint(err2) + ": " + stderr.String())
+	}
+	fmt.Println("Result: " + out.String())*/
+
 	// We put the socket in a sub-directory to have more control on the permissions
 	const socketPath = "/var/run/scope/plugins/iowait/iowait.sock"
 	hostID, _ := os.Hostname()
@@ -129,7 +144,7 @@ type controlData struct {
 
 type metricTemplate struct {
 	ID       string  `json:"id"`
-	Label    string  `json:"label,switchToIOWait,omitempty"`
+	Label    string  `json:"label,omitempty"`
 	Format   string  `json:"format,omitempty"`
 	Priority float64 `json:"priority,omitempty"`
 }
@@ -279,7 +294,7 @@ func (p *Plugin) Control(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusBadRequest)
 		return
 	}
-	expectedControlID, _, _ := p.controlDetails(xreq.Control)
+	expectedControlID, _, _ := p.controlDetails()
 	if expectedControlID != xreq.Control {
 		log.Printf("Bad control, expected %q, got %q", expectedControlID, xreq.Control)
 		w.WriteHeader(http.StatusBadRequest)
@@ -287,18 +302,11 @@ func (p *Plugin) Control(w http.ResponseWriter, r *http.Request) {
 	}
 	p.iowaitMode = !p.iowaitMode
 	rpt, err := p.makeReport()
-
-	// TODO remove: added to try out controls
-	if xreq.Control == "showMyStuff" {
-		rpt, err = p.makeFakeReport()
-	}
-
 	if err != nil {
 		log.Printf("error: %v", err)
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
-
 	res := response{ShortcutReport: rpt}
 	raw, err := json.Marshal(res)
 	if err != nil {
@@ -346,21 +354,15 @@ func (p *Plugin) allControlDetails() []controlDetails {
 		{
 			id:    "switchToIOWait",
 			human: "Switch to IO wait",
-			icon:  "ambulance",
-			dead:  p.iowaitMode,
-		},
-		{
-			id:    "showMyStuff",
-			human: "Show My Stuff",
-			icon:  "bicycle",
+			icon:  "fa-clock-o",
 			dead:  p.iowaitMode,
 		},
 	}
 }
 
-func (p *Plugin) controlDetails(cntrlName string) (string, string, string) {
+func (p *Plugin) controlDetails() (string, string, string) {
 	for _, details := range p.allControlDetails() {
-		if !details.dead && details.id == cntrlName {
+		if !details.dead {
 			return details.id, details.human, details.icon
 		}
 	}
@@ -389,6 +391,7 @@ func iostatValue(idx int) (float64, error) {
 
 // Get the latest iostat values
 func iostat() ([]string, error) {
+
 	out, err := exec.Command("iostat", "-c").Output()
 	if err != nil {
 		return nil, fmt.Errorf("iowait: %v", err)
@@ -398,7 +401,8 @@ func iostat() ([]string, error) {
 	//
 	// avg-cpu:  %user   %nice %system %iowait  %steal   %idle
 	//	          2.37    0.00    1.58    0.01    0.00   96.04
-	lines := strings.Split(string(out), "\n")
+	replaced := strings.ReplaceAll(string(out), ",", ".")
+	lines := strings.Split(replaced, "\n")
 	if len(lines) < 4 {
 		return nil, fmt.Errorf("iowait: unexpected output: %q", out)
 	}
@@ -408,59 +412,4 @@ func iostat() ([]string, error) {
 		return nil, fmt.Errorf("iowait: unexpected output: %q", out)
 	}
 	return values, nil
-}
-
-
-
-
-
-// TODO remove: added to try out controls
-func (p *Plugin) makeFakeReport() (*report, error) {
-	metrics, err := p.fakeMetrics()
-	if err != nil {
-		return nil, err
-	}
-	rpt := &report{
-		Host: topology{
-			Nodes: map[string]node{
-				p.getTopologyHost(): {
-					Metrics:        metrics,
-					LatestControls: p.latestControls(),
-				},
-			},
-			MetricTemplates: p.metricTemplates(),
-			Controls:        p.controls(),
-		},
-		Plugins: []pluginSpec{
-			{
-				ID:          "iowait",
-				Label:       "iowait",
-				Description: "Adds a graph of CPU IO Wait to hosts",
-				Interfaces:  []string{"reporter", "controller"},
-				APIVersion:  "1",
-			},
-		},
-	}
-	return rpt, nil
-}
-
-func (p *Plugin) fakeMetrics() (map[string]metric, error) {
-	_, err := p.metricValue()
-	if err != nil {
-		return nil, err
-	}
-	id, _ := p.metricIDAndName()
-	metrics := map[string]metric{
-		id: {
-			Samples: []sample{
-				{
-					Date:  time.Now(),
-					Value: 66,
-				},
-			},
-			Min: 0,
-			Max: 100,
-		},
-	}
-	return metrics, nil
 }
