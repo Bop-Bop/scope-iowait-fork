@@ -21,7 +21,6 @@ spec:
       containers:
         - name: weavescope-iowait-plugin
           image: custom_waitio_plugin:latest
-          imagePullPolicy: Never
           securityContext:
             privileged: true
           volumeMounts:
